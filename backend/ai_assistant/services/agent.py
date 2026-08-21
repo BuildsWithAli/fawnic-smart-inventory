@@ -20,7 +20,7 @@ import logging
 from django.conf import settings
 
 from . import tools
-from .providers import ClaudeProvider, OllamaProvider, OpenAIProvider
+from .providers import ClaudeProvider, GeminiProvider, OllamaProvider, OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,8 @@ def get_provider():
         return ClaudeProvider()
     if provider == "openai" and settings.OPENAI_API_KEY:
         return OpenAIProvider()
+    if provider == "gemini" and settings.GEMINI_API_KEY:
+        return GeminiProvider()
     if provider == "ollama":
         return OllamaProvider()
 
@@ -102,6 +104,8 @@ def get_provider():
         return ClaudeProvider()
     if settings.OPENAI_API_KEY:
         return OpenAIProvider()
+    if settings.GEMINI_API_KEY:
+        return GeminiProvider()
     return OllamaProvider()
 
 

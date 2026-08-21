@@ -13,7 +13,7 @@ Tests for the agentic AI stock assistant's safety guarantees:
 
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from inventory.models import Brand, Category, Product, Warehouse
 from orders.models import Order, OrderItem
@@ -21,7 +21,7 @@ from partners.models import Customer
 
 from .models import StockAlert
 from .services import agent, tools
-from .services.providers import AIProvider
+from .services.providers import AIProvider, ClaudeProvider, GeminiProvider, OllamaProvider, OpenAIProvider
 
 
 def make_product(quantity, reorder_threshold, sku="FWN-TEST-001"):
@@ -32,6 +32,29 @@ def make_product(quantity, reorder_threshold, sku="FWN-TEST-001"):
         sku=sku, name="Test Wallet", category=category, brand=brand, warehouse=warehouse,
         quantity=quantity, unit_cost=Decimal("10.00"), reorder_threshold=reorder_threshold,
     )
+
+
+class ProviderSelectionTests(TestCase):
+    """get_provider() must resolve to the configured provider, and fall back
+    sensibly when the selected one has no key configured."""
+
+    @override_settings(AI_PROVIDER="claude", ANTHROPIC_API_KEY="test-key")
+    def test_selects_claude_when_configured(self):
+        self.assertIsInstance(agent.get_provider(), ClaudeProvider)
+
+    @override_settings(AI_PROVIDER="openai", OPENAI_API_KEY="test-key")
+    def test_selects_openai_when_configured(self):
+        self.assertIsInstance(agent.get_provider(), OpenAIProvider)
+
+    @override_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key")
+    def test_selects_gemini_when_configured(self):
+        self.assertIsInstance(agent.get_provider(), GeminiProvider)
+
+    @override_settings(
+        AI_PROVIDER="gemini", GEMINI_API_KEY="", ANTHROPIC_API_KEY="", OPENAI_API_KEY="",
+    )
+    def test_falls_back_to_ollama_when_no_key_matches_selected_provider(self):
+        self.assertIsInstance(agent.get_provider(), OllamaProvider)
 
 
 class ToolWhitelistTests(TestCase):

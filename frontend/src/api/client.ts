@@ -74,3 +74,20 @@ export function extractErrorMessage(error: unknown, fallback = "Something went w
   }
   return fallback;
 }
+
+/** Maps DRF's {field: [messages]} validation error shape to a flat field->message record for inline form errors. */
+export function extractFieldErrors(error: unknown): Record<string, string> {
+  if (!axios.isAxiosError(error)) return {};
+  const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return {};
+
+  const fieldErrors: Record<string, string> = {};
+  for (const [key, value] of Object.entries(detail as Record<string, unknown>)) {
+    if (Array.isArray(value) && typeof value[0] === "string") {
+      fieldErrors[key] = value[0];
+    } else if (typeof value === "string") {
+      fieldErrors[key] = value;
+    }
+  }
+  return fieldErrors;
+}

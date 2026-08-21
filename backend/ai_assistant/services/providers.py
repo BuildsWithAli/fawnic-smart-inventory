@@ -1,8 +1,8 @@
 """
 AIProvider abstraction. The rest of the application (agent.py, and everything
 above it) only ever talks to this interface — never directly to the Anthropic,
-OpenAI, or Ollama SDKs. That keeps provider swaps and fallback logic isolated
-to this one file.
+OpenAI, Gemini, or Ollama SDKs. That keeps provider swaps and fallback logic
+isolated to this one file.
 """
 
 import json
@@ -212,5 +212,58 @@ class OllamaProvider(AIProvider):
                     logger.warning("Tool call rejected: %s(%s) -> %s", name, arguments, exc)
                     content = json.dumps({"error": str(exc)})
                 messages.append({"role": "tool", "content": content})
+
+        return "Reached maximum tool-call turns without a final answer."
+
+
+class GeminiProvider(AIProvider):
+    """Fallback/alternate provider using Google's Gemini API (google-genai SDK).
+    Same tool-calling contract as the other providers — the model only ever
+    sees JSON tool-call requests/results via `tool_executor`."""
+
+    def __init__(self, model="gemini-3.6-flash", api_key=None):
+        from google import genai
+
+        self.client = genai.Client(api_key=api_key or settings.GEMINI_API_KEY)
+        self.model = model
+
+    def run_tool_agent(self, *, system_prompt, user_prompt, tools, tool_executor, max_turns=6):
+        from google.genai import types
+
+        gemini_tool = types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name=t["name"],
+                    description=t["description"],
+                    parameters_json_schema=t["input_schema"],
+                )
+                for t in tools
+            ]
+        )
+        config = types.GenerateContentConfig(system_instruction=system_prompt, tools=[gemini_tool])
+        contents = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
+
+        for _ in range(max_turns):
+            response = self.client.models.generate_content(model=self.model, contents=contents, config=config)
+
+            calls = response.function_calls or []
+            if not calls:
+                return response.text or ""
+
+            contents.append(response.candidates[0].content)
+
+            response_parts = []
+            for call in calls:
+                try:
+                    result = tool_executor(call.name, dict(call.args or {}))
+                    if not isinstance(result, dict):
+                        result = {"result": result}
+                    response_parts.append(types.Part.from_function_response(name=call.name, response=result))
+                except Exception as exc:
+                    logger.warning("Tool call rejected: %s(%s) -> %s", call.name, call.args, exc)
+                    response_parts.append(
+                        types.Part.from_function_response(name=call.name, response={"error": str(exc)})
+                    )
+            contents.append(types.Content(role="user", parts=response_parts))
 
         return "Reached maximum tool-call turns without a final answer."

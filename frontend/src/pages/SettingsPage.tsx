@@ -50,7 +50,7 @@ export function SettingsPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted">AI Stock Assistant</p>
             <p className="mt-1 text-sm text-ink">
               Runs automatically on Kanban status changes. Configured server-side via environment variables
-              (Claude primary, OpenAI fallback, Ollama optional for local development).
+              (Claude, OpenAI, or Gemini as the active provider; Ollama optional for local development).
             </p>
           </div>
         </div>

@@ -160,6 +160,7 @@ CORS_ALLOW_CREDENTIALS = True
 # AI provider configuration (see ai_assistant.services)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "claude")

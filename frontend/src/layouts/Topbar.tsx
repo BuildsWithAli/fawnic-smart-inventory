@@ -1,5 +1,7 @@
-import { Menu, Search, BellRing } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Menu, Search, BellRing, Settings, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Dropdown, DropdownItem } from "../components/ui/Dropdown";
+import { useAuth } from "../hooks/useAuth";
 
 interface TopbarProps {
   title: string;
@@ -7,7 +9,16 @@ interface TopbarProps {
   alertCount?: number;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  owner: "Owner",
+  inventory_manager: "Inventory Manager",
+  support: "Support",
+};
+
 export function Topbar({ title, onOpenMobileSidebar, alertCount = 0 }: TopbarProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border bg-surface/90 px-4 backdrop-blur sm:px-6">
       <button
@@ -40,6 +51,27 @@ export function Topbar({ title, onOpenMobileSidebar, alertCount = 0 }: TopbarPro
             </span>
           )}
         </Link>
+
+        <Dropdown
+          trigger={
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft font-display text-xs font-semibold text-accent-dark hover:ring-2 hover:ring-accent/30">
+              {(user?.first_name?.[0] ?? user?.username?.[0] ?? "?").toUpperCase()}
+            </span>
+          }
+        >
+          <div className="border-b border-border px-3.5 py-2.5">
+            <p className="truncate text-sm font-medium text-ink">{user?.first_name || user?.username}</p>
+            <p className="truncate text-xs text-muted">{user ? ROLE_LABELS[user.role] : ""}</p>
+          </div>
+          <DropdownItem onClick={() => navigate("/settings")}>
+            <Settings size={15} />
+            Settings
+          </DropdownItem>
+          <DropdownItem onClick={logout} danger>
+            <LogOut size={15} />
+            Log out
+          </DropdownItem>
+        </Dropdown>
       </div>
     </header>
   );

@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Pagination } from "../ui/Pagination";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useToast } from "../../hooks/useToast";
-import { extractErrorMessage } from "../../api/client";
+import { extractErrorMessage, extractFieldErrors } from "../../api/client";
 import type { CrudConfig } from "../../types/crud";
 
 const PAGE_SIZE = 20;
@@ -86,7 +86,12 @@ export function CrudPage<T extends { id: number }>({ config, filters = [] }: Cru
       setEditingRow(null);
       void load();
     } catch (err) {
-      show(extractErrorMessage(err, `Couldn't save this ${config.singularLabel.toLowerCase()}.`), "error");
+      const fieldErrors = extractFieldErrors(err);
+      if (Object.keys(fieldErrors).length > 0) {
+        setFormErrors(fieldErrors);
+      } else {
+        show(extractErrorMessage(err, `Couldn't save this ${config.singularLabel.toLowerCase()}.`), "error");
+      }
     } finally {
       setIsSaving(false);
     }
