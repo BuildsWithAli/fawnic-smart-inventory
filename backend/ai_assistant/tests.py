@@ -13,7 +13,7 @@ Tests for the agentic AI stock assistant's safety guarantees:
 
 from decimal import Decimal
 
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from inventory.models import Brand, Category, Product, Warehouse
 from orders.models import Order, OrderItem
@@ -165,7 +165,14 @@ class ScriptedFakeProvider(AIProvider):
         self._order_id = order_id
 
 
-class EvaluateOrderStockTests(TestCase):
+class EvaluateOrderStockTests(TransactionTestCase):
+    """TransactionTestCase, not TestCase: evaluate_order_stock now runs the
+    provider call in a worker thread (see agent.AI_CALL_TIMEOUT_SECONDS), which
+    opens its own SQLite connection. TestCase's outer per-test transaction on
+    the main connection would collide with that second connection's writes
+    ("database is locked") — an artifact of the test wrapper, not of production
+    request handling, where no such outer transaction is held open."""
+
     def test_low_stock_scenario_produces_alert_with_real_tool_retrieved_numbers(self):
         low_product = make_product(quantity=2, reorder_threshold=10, sku="FWN-LOW-001")
         healthy_product = make_product(quantity=100, reorder_threshold=10, sku="FWN-OK-001")
@@ -203,3 +210,36 @@ class EvaluateOrderStockTests(TestCase):
 
         # Product.quantity was never touched by the agent pipeline.
         self.assertEqual(live_product.quantity, 2)
+
+    def test_a_hanging_provider_does_not_block_beyond_the_timeout(self):
+        """A provider whose run_tool_agent never returns (network hang, dead
+        connection, etc.) must not be allowed to block the Kanban status-change
+        request indefinitely — evaluate_order_stock has to give up and return."""
+        import time
+
+        class HangingProvider(AIProvider):
+            def run_tool_agent(self, **kwargs):
+                time.sleep(5)
+                return "should never be reached in this test"
+
+        product = make_product(quantity=2, reorder_threshold=10)
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+        OrderItem.objects.create(order=order, product=product, quantity=1)
+
+        original_get_provider = agent.get_provider
+        original_timeout = agent.AI_CALL_TIMEOUT_SECONDS
+        agent.get_provider = lambda: HangingProvider()
+        agent.AI_CALL_TIMEOUT_SECONDS = 0.2
+        try:
+            started = time.monotonic()
+            result = agent.evaluate_order_stock(order)
+            elapsed = time.monotonic() - started
+        finally:
+            agent.get_provider = original_get_provider
+            agent.AI_CALL_TIMEOUT_SECONDS = original_timeout
+
+        self.assertIsNone(result)
+        self.assertLess(elapsed, 2, "evaluate_order_stock should give up at the timeout, not wait for the hang")
+        # No alert was created either, since the (abandoned) call never got that far.
+        self.assertEqual(StockAlert.objects.filter(order=order).count(), 0)

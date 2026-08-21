@@ -16,6 +16,7 @@ Safety design (see CLAUDE.md sections 19-20):
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from django.conf import settings
 
@@ -23,6 +24,13 @@ from . import tools
 from .providers import ClaudeProvider, GeminiProvider, OllamaProvider, OpenAIProvider
 
 logger = logging.getLogger(__name__)
+
+# Hard upper bound on how long the Kanban status-change request will wait for the
+# AI provider before giving up. SDKs' own retry/backoff logic can exceed any
+# per-request timeout they're configured with, so this is enforced independently
+# in a worker thread — a slow or hanging provider must never block the request
+# that persisted the order's new status.
+AI_CALL_TIMEOUT_SECONDS = 45
 
 TOOL_SPECS = [
     {
@@ -146,14 +154,27 @@ def evaluate_order_stock(order):
         "Check each product's stock level against its reorder threshold and act accordingly."
     )
 
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        provider.run_tool_agent,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        tools=TOOL_SPECS,
+        tool_executor=_execute_tool,
+        max_turns=6,
+    )
     try:
-        return provider.run_tool_agent(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            tools=TOOL_SPECS,
-            tool_executor=_execute_tool,
-            max_turns=6,
+        return future.result(timeout=AI_CALL_TIMEOUT_SECONDS)
+    except FutureTimeoutError:
+        logger.warning(
+            "AI provider call timed out after %ss while evaluating order %s; abandoning it "
+            "(the order's status change was already saved).",
+            AI_CALL_TIMEOUT_SECONDS,
+            order.id,
         )
+        return None
     except Exception:
         logger.exception("AI provider call failed while evaluating order %s", order.id)
         return None
+    finally:
+        executor.shutdown(wait=False)
