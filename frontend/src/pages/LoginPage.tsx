@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import fawnicLogo from "../assets/FAWNIC_logo.png";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { extractErrorMessage } from "../api/client";
@@ -34,9 +35,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent font-display text-xl font-semibold text-white">
-            F
-          </div>
+          <img src={fawnicLogo} alt="FAWNIC" className="h-12 w-12 rounded-lg object-cover" />
           <div>
             <h1 className="font-display text-2xl font-medium text-ink">FAWNIC</h1>
             <p className="text-sm text-muted">Smart Inventory &amp; Order Management</p>

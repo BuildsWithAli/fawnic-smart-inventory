@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import fawnicLogo from "../assets/FAWNIC_logo.png";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -67,9 +68,7 @@ export function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onCloseMobile
         )}
       >
         <div className="relative flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5 before:absolute before:inset-x-4 before:bottom-0 before:h-px before:border-b before:border-dashed before:border-white/15">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent font-display text-sm font-semibold text-white">
-            F
-          </div>
+          <img src={fawnicLogo} alt="FAWNIC" className="h-8 w-8 shrink-0 rounded-md object-cover" />
           {!collapsed && <span className="font-display text-lg font-medium tracking-tight text-white">FAWNIC</span>}
           <button
             onClick={onCloseMobile}
