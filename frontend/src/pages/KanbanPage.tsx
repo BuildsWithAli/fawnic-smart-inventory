@@ -9,6 +9,7 @@ import { Modal } from "../components/ui/Modal";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { OrderCard } from "../features/kanban/OrderCard";
+import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { extractErrorMessage } from "../api/client";
 import { orderApi, customerService, productService } from "../services";
@@ -29,6 +30,7 @@ interface NewOrderItem {
 
 export function KanbanPage() {
   const { show } = useToast();
+  const { canWrite } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export function KanbanPage() {
   }, [orders]);
 
   const handleDragEnd = async (result: DropResult) => {
+    if (!canWrite) return;
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
@@ -132,12 +135,14 @@ export function KanbanPage() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          New Order
-        </Button>
-      </div>
+      {canWrite && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            New Order
+          </Button>
+        </div>
+      )}
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 gap-4 overflow-x-auto pb-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -165,7 +170,9 @@ export function KanbanPage() {
                         <Skeleton className="h-24 w-full" />
                       </>
                     ) : (
-                      columns[col.status].map((order, index) => <OrderCard key={order.id} order={order} index={index} />)
+                      columns[col.status].map((order, index) => (
+                        <OrderCard key={order.id} order={order} index={index} canDrag={canWrite} />
+                      ))
                     )}
                     {provided.placeholder}
                   </div>

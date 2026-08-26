@@ -6,6 +6,7 @@ import { DataTable } from "../components/crud/DataTable";
 import { FilterBar } from "../components/crud/FilterBar";
 import { SeverityBadge } from "../components/crud/StatusBadge";
 import { Badge } from "../components/ui/Badge";
+import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { extractErrorMessage } from "../api/client";
 import { alertService } from "../services";
@@ -14,6 +15,7 @@ import { formatDate } from "../utils/format";
 
 export function AlertsPage() {
   const { show } = useToast();
+  const { canWrite } = useAuth();
   const [rows, setRows] = useState<StockAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +130,7 @@ export function AlertsPage() {
           emptyTitle="No stock alerts"
           emptyDescription="The AI stock assistant raises alerts here when an order's products run low as it moves through production."
           rowActions={(row) =>
-            !row.resolved ? (
+            !row.resolved && canWrite ? (
               <Button size="sm" variant="secondary" isLoading={resolvingId === row.id} onClick={() => handleResolve(row)}>
                 <CheckCircle2 size={14} />
                 Resolve

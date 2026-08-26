@@ -9,6 +9,7 @@ import { Modal } from "../components/ui/Modal";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Pagination } from "../components/ui/Pagination";
 import { LineItemBuilder, type LineItem } from "../components/crud/LineItemBuilder";
+import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { extractErrorMessage } from "../api/client";
 import { purchaseService, supplierService, productService } from "../services";
@@ -19,6 +20,7 @@ const PAGE_SIZE = 20;
 
 export function PurchasesPage() {
   const { show } = useToast();
+  const { canWrite } = useAuth();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -121,12 +123,14 @@ export function PurchasesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          New Purchase
-        </Button>
-      </div>
+      {canWrite && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            New Purchase
+          </Button>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <DataTable
@@ -153,13 +157,15 @@ export function PurchasesPage() {
               >
                 <Eye size={15} />
               </button>
-              <button
-                onClick={() => setDeleting(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
-                aria-label="Delete purchase"
-              >
-                <Trash2 size={15} />
-              </button>
+              {canWrite && (
+                <button
+                  onClick={() => setDeleting(row)}
+                  className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
+                  aria-label="Delete purchase"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </div>
           )}
         />

@@ -1,7 +1,8 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from accounts.permissions import IsOwnerOrInventoryManager
 
 from .models import StockAlert
 from .serializers import StockAlertSerializer
@@ -10,7 +11,7 @@ from .serializers import StockAlertSerializer
 class StockAlertViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = StockAlert.objects.select_related("product", "order").all()
     serializer_class = StockAlertSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerOrInventoryManager]
     filterset_fields = ["resolved", "severity", "product", "order"]
     ordering_fields = ["created_at"]
 

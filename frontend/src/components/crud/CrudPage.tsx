@@ -9,6 +9,7 @@ import { FormModal } from "./FormModal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Pagination } from "../ui/Pagination";
 import { useDebounce } from "../../hooks/useDebounce";
+import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { extractErrorMessage, extractFieldErrors } from "../../api/client";
 import type { CrudConfig } from "../../types/crud";
@@ -23,6 +24,7 @@ interface CrudPageProps<T extends { id: number }> {
 
 export function CrudPage<T extends { id: number }>({ config, filters = [] }: CrudPageProps<T>) {
   const { show } = useToast();
+  const { canWrite } = useAuth();
   const [rows, setRows] = useState<T[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -140,10 +142,12 @@ export function CrudPage<T extends { id: number }>({ config, filters = [] }: Cru
             }}
           />
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          Add {config.singularLabel}
-        </Button>
+        {canWrite && (
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            Add {config.singularLabel}
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-hidden">
@@ -156,24 +160,28 @@ export function CrudPage<T extends { id: number }>({ config, filters = [] }: Cru
           onRetry={load}
           emptyTitle={config.emptyTitle}
           emptyDescription={config.emptyDescription}
-          rowActions={(row) => (
-            <div className="flex items-center justify-end gap-1">
-              <button
-                onClick={() => openEdit(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
-                aria-label={`Edit ${config.singularLabel}`}
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                onClick={() => setDeletingRow(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
-                aria-label={`Delete ${config.singularLabel}`}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          )}
+          rowActions={
+            canWrite
+              ? (row) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => openEdit(row)}
+                      className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
+                      aria-label={`Edit ${config.singularLabel}`}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => setDeletingRow(row)}
+                      className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
+                      aria-label={`Delete ${config.singularLabel}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )
+              : undefined
+          }
         />
         {!isLoading && !error && rows.length > 0 && (
           <Pagination page={page} pageSize={PAGE_SIZE} total={count} onPageChange={setPage} />

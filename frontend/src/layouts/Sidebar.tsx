@@ -34,7 +34,7 @@ const NAV_ITEMS = [
   { to: "/sales", label: "Sales", icon: Receipt },
   { to: "/kanban", label: "Orders / Kanban", icon: Kanban },
   { to: "/alerts", label: "AI Alerts", icon: BellRing },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -51,7 +51,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onCloseMobile }: SidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, isOwner } = useAuth();
+  const navItems = NAV_ITEMS.filter((item) => !item.ownerOnly || isOwner);
 
   return (
     <>
@@ -80,7 +81,7 @@ export function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onCloseMobile
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <li key={item.to}>
                 <NavLink
                   to={item.to}

@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ToastProvider } from "./hooks/useToast";
-import { ProtectedRoute } from "./routes/ProtectedRoute";
+import { ProtectedRoute, OwnerOnlyRoute } from "./routes/ProtectedRoute";
 import { AppLayout } from "./layouts/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -39,7 +39,9 @@ export default function App() {
                 <Route path="/sales" element={<SalesPage />} />
                 <Route path="/kanban" element={<KanbanPage />} />
                 <Route path="/alerts" element={<AlertsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                <Route element={<OwnerOnlyRoute />}>
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
               </Route>
             </Route>
           </Routes>

@@ -8,6 +8,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  isOwner: boolean;
+  canWrite: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -44,7 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, isLoading, login, logout }}>{children}</AuthContext.Provider>;
+  const isOwner = user?.role === "owner";
+  const canWrite = user?.role === "owner" || user?.role === "inventory_manager";
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading, login, logout, isOwner, canWrite }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

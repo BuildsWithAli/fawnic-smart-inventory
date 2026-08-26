@@ -2,8 +2,9 @@ import logging
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from accounts.permissions import IsOwnerOrInventoryManager
 
 from .models import Order
 from .serializers import OrderSerializer, OrderStatusUpdateSerializer
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related("customer").prefetch_related("items__product").all()
     serializer_class = OrderSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerOrInventoryManager]
     filterset_fields = ["status", "customer"]
     search_fields = ["customer__name"]
     ordering_fields = ["due_date", "created_at"]

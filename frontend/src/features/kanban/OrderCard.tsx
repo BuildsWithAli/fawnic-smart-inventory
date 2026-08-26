@@ -4,18 +4,19 @@ import clsx from "clsx";
 import type { Order } from "../../types/models";
 import { formatDate } from "../../utils/format";
 
-export function OrderCard({ order, index }: { order: Order; index: number }) {
+export function OrderCard({ order, index, canDrag = true }: { order: Order; index: number; canDrag?: boolean }) {
   const hasStockRisk = order.items.some((item) => item.stock_status !== "in_stock");
 
   return (
-    <Draggable draggableId={String(order.id)} index={index}>
+    <Draggable draggableId={String(order.id)} index={index} isDragDisabled={!canDrag}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={clsx(
-            "cursor-grab select-none rounded-lg border border-border bg-surface p-3.5 shadow-sm transition-shadow active:cursor-grabbing",
+            "select-none rounded-lg border border-border bg-surface p-3.5 shadow-sm transition-shadow",
+            canDrag && "cursor-grab active:cursor-grabbing",
             snapshot.isDragging && "shadow-lg ring-2 ring-accent/30",
           )}
         >

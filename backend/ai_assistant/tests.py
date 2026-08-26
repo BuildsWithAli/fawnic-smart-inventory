@@ -14,7 +14,9 @@ Tests for the agentic AI stock assistant's safety guarantees:
 from decimal import Decimal
 
 from django.test import TestCase, TransactionTestCase, override_settings
+from rest_framework.test import APIClient
 
+from accounts.models import User
 from inventory.models import Brand, Category, Product, Warehouse
 from orders.models import Order, OrderItem
 from partners.models import Customer
@@ -119,6 +121,46 @@ class ToolFunctionTests(TestCase):
         product = make_product(quantity=3, reorder_threshold=10)
         with self.assertRaises(ValueError):
             tools.suggest_reorder(product_id=product.id, suggested_qty=0)
+
+
+class AlertRolePermissionTests(TestCase):
+    """Support can view AI Alerts but must not resolve them; Owner and
+    Inventory Manager can do both."""
+
+    def setUp(self):
+        product = make_product(quantity=2, reorder_threshold=10)
+        result = tools.flag_low_stock(product_id=product.id, order_id=None, severity="high")
+        self.alert = StockAlert.objects.get(pk=result["alert_id"])
+
+        self.owner = User.objects.create_user(username="owner3", password="Test@12345", role=User.Role.OWNER)
+        self.manager = User.objects.create_user(
+            username="manager3", password="Test@12345", role=User.Role.INVENTORY_MANAGER
+        )
+        self.support = User.objects.create_user(username="support3", password="Test@12345", role=User.Role.SUPPORT)
+
+    def _client_for(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def test_support_can_view_but_not_resolve(self):
+        client = self._client_for(self.support)
+        self.assertEqual(client.get("/api/alerts/").status_code, 200)
+        self.assertEqual(client.post(f"/api/alerts/{self.alert.id}/resolve/").status_code, 403)
+        self.alert.refresh_from_db()
+        self.assertFalse(self.alert.resolved)
+
+    def test_inventory_manager_can_resolve(self):
+        client = self._client_for(self.manager)
+        response = client.post(f"/api/alerts/{self.alert.id}/resolve/")
+        self.assertEqual(response.status_code, 200)
+        self.alert.refresh_from_db()
+        self.assertTrue(self.alert.resolved)
+
+    def test_owner_can_resolve(self):
+        client = self._client_for(self.owner)
+        response = client.post(f"/api/alerts/{self.alert.id}/resolve/")
+        self.assertEqual(response.status_code, 200)
 
 
 class ScriptedFakeProvider(AIProvider):

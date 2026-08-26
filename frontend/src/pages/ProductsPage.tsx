@@ -12,6 +12,7 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Pagination } from "../components/ui/Pagination";
 import { StockStatusBadge } from "../components/crud/StatusBadge";
 import { useDebounce } from "../hooks/useDebounce";
+import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { extractErrorMessage } from "../api/client";
 import { productService, brandService, categoryService, warehouseService, stockAdjustmentApi } from "../services";
@@ -44,6 +45,7 @@ const EMPTY_FORM: ProductFormValues = {
 
 export function ProductsPage() {
   const { show } = useToast();
+  const { canWrite } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -223,10 +225,12 @@ export function ProductsPage() {
             }}
           />
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} />
-          Add Product
-        </Button>
+        {canWrite && (
+          <Button onClick={openCreate}>
+            <Plus size={16} />
+            Add Product
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-hidden">
@@ -257,32 +261,36 @@ export function ProductsPage() {
           onRetry={load}
           emptyTitle="No products found"
           emptyDescription="Add your first product to start managing inventory."
-          rowActions={(row) => (
-            <div className="flex items-center justify-end gap-1">
-              <button
-                onClick={() => openAdjust(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
-                aria-label="Adjust stock"
-                title="Adjust stock"
-              >
-                <SlidersHorizontal size={15} />
-              </button>
-              <button
-                onClick={() => openEdit(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
-                aria-label="Edit product"
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                onClick={() => setDeletingProduct(row)}
-                className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
-                aria-label="Delete product"
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          )}
+          rowActions={
+            canWrite
+              ? (row) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => openAdjust(row)}
+                      className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
+                      aria-label="Adjust stock"
+                      title="Adjust stock"
+                    >
+                      <SlidersHorizontal size={15} />
+                    </button>
+                    <button
+                      onClick={() => openEdit(row)}
+                      className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-ink"
+                      aria-label="Edit product"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => setDeletingProduct(row)}
+                      className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
+                      aria-label="Delete product"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )
+              : undefined
+          }
         />
         {!isLoading && !error && rows.length > 0 && (
           <Pagination page={page} pageSize={PAGE_SIZE} total={count} onPageChange={setPage} />

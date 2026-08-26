@@ -17,3 +17,11 @@ export function ProtectedRoute() {
 
   return <Outlet />;
 }
+
+export function OwnerOnlyRoute() {
+  const { isOwner } = useAuth();
+
+  if (!isOwner) return <Navigate to="/" replace />;
+
+  return <Outlet />;
+}
