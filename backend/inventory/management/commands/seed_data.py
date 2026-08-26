@@ -10,6 +10,7 @@ from ai_assistant.models import StockAlert
 from inventory.models import Brand, Category, Product, Warehouse
 from orders.models import Order, OrderItem
 from partners.models import Customer, Supplier
+from transactions.models import Purchase, Sale
 from transactions.services import create_purchase, create_sale
 
 
@@ -144,29 +145,34 @@ class Command(BaseCommand):
 
     def _seed_purchases(self, suppliers, products):
         today = datetime.date.today()
-        create_purchase(
-            supplier=suppliers["Lagos Leather Supply Co."],
-            date=today - datetime.timedelta(days=12),
-            items=[
-                {"product": products["FWN-MAT-001"], "quantity": 20, "unit_cost": 145.00},
-                {"product": products["FWN-MAT-003"], "quantity": 40, "unit_cost": 6.80},
-            ],
-        )
-        create_purchase(
-            supplier=suppliers["Bronze Hardware Imports"],
-            date=today - datetime.timedelta(days=6),
-            items=[
-                {"product": products["FWN-HW-002"], "quantity": 60, "unit_cost": 2.40},
-                {"product": products["FWN-HW-001"], "quantity": 10, "unit_cost": 3.10},
-            ],
-        )
-        create_purchase(
-            supplier=suppliers["Kano Tannery Ltd."],
-            date=today - datetime.timedelta(days=2),
-            items=[
-                {"product": products["FWN-MAT-002"], "quantity": 15, "unit_cost": 4.20},
-            ],
-        )
+        specs = [
+            (
+                suppliers["Lagos Leather Supply Co."],
+                12,
+                [
+                    {"product": products["FWN-MAT-001"], "quantity": 20, "unit_cost": 145.00},
+                    {"product": products["FWN-MAT-003"], "quantity": 40, "unit_cost": 6.80},
+                ],
+            ),
+            (
+                suppliers["Bronze Hardware Imports"],
+                6,
+                [
+                    {"product": products["FWN-HW-002"], "quantity": 60, "unit_cost": 2.40},
+                    {"product": products["FWN-HW-001"], "quantity": 10, "unit_cost": 3.10},
+                ],
+            ),
+            (
+                suppliers["Kano Tannery Ltd."],
+                2,
+                [{"product": products["FWN-MAT-002"], "quantity": 15, "unit_cost": 4.20}],
+            ),
+        ]
+        for supplier, days_ago, items in specs:
+            date = today - datetime.timedelta(days=days_ago)
+            if Purchase.objects.filter(supplier=supplier, date=date).exists():
+                continue
+            create_purchase(supplier=supplier, date=date, items=items)
 
     def _seed_sales(self, customers, products):
         today = datetime.date.today()
@@ -180,9 +186,13 @@ class Command(BaseCommand):
             ("Heritage Boutique", 1, [("FWN-WAL-001", 2, 32.00)]),
         ]
         for customer_name, days_ago, items in sales_specs:
+            customer = customers[customer_name]
+            date = today - datetime.timedelta(days=days_ago)
+            if Sale.objects.filter(customer=customer, date=date).exists():
+                continue
             create_sale(
-                customer=customers[customer_name],
-                date=today - datetime.timedelta(days=days_ago),
+                customer=customer,
+                date=date,
                 items=[{"product": products[sku], "quantity": qty, "unit_price": price} for sku, qty, price in items],
             )
 
@@ -192,10 +202,14 @@ class Command(BaseCommand):
             sku = random.choice(chart_products)
             product = products[sku]
             qty = random.randint(1, 2)
+            customer = random.choice(list(customers.values()))
+            date = today - datetime.timedelta(days=offset)
+            if Sale.objects.filter(customer=customer, date=date).exists():
+                continue
             if product.quantity >= qty:
                 create_sale(
-                    customer=random.choice(list(customers.values())),
-                    date=today - datetime.timedelta(days=offset),
+                    customer=customer,
+                    date=date,
                     items=[{"product": product, "quantity": qty, "unit_price": float(product.unit_cost) * 1.6}],
                 )
 
@@ -223,7 +237,7 @@ class Command(BaseCommand):
                             order=order,
                             product=products[sku],
                             quantity=qty,
-                            unit_price=products[sku].unit_cost * Decimal("1.6"),
+                            unit_price=Decimal(str(products[sku].unit_cost)) * Decimal("1.6"),
                         )
                         for sku, qty in items
                     ]

@@ -1,6 +1,10 @@
 from decimal import Decimal
 
+from django.core.management import call_command
 from django.test import TestCase
+
+from orders.models import Order
+from transactions.models import Purchase, Sale
 
 from .models import Brand, Category, Product, Warehouse
 from .services import adjust_stock
@@ -55,3 +59,19 @@ class StockAdjustmentTests(TestCase):
         self.assertEqual(adjustment.new_quantity, 15)
         self.assertEqual(adjustment.difference, -5)
         self.assertEqual(adjustment.reason, "Damaged goods")
+
+
+class SeedDataIdempotencyTests(TestCase):
+    def test_running_seed_data_twice_does_not_duplicate_purchases_or_sales(self):
+        call_command("seed_data")
+        purchase_count = Purchase.objects.count()
+        sale_count = Sale.objects.count()
+        order_count = Order.objects.count()
+        product_quantities = {p.sku: p.quantity for p in Product.objects.all()}
+
+        call_command("seed_data")
+
+        self.assertEqual(Purchase.objects.count(), purchase_count)
+        self.assertEqual(Sale.objects.count(), sale_count)
+        self.assertEqual(Order.objects.count(), order_count)
+        self.assertEqual({p.sku: p.quantity for p in Product.objects.all()}, product_quantities)
