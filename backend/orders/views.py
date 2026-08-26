@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from accounts.permissions import IsOwnerOrInventoryManager
 
 from .models import Order
 from .serializers import OrderSerializer, OrderStatusUpdateSerializer
+from .services import create_sale_from_order
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,20 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         serializer = OrderStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        new_status = serializer.validated_data["status"]
 
-        order.status = serializer.validated_data["status"]
-        order.save(update_fields=["status", "updated_at"])
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            previous_status = order.status
+            order.status = new_status
+            order.save(update_fields=["status", "updated_at"])
+
+            if (
+                new_status == Order.Status.SHIPPED
+                and previous_status != Order.Status.SHIPPED
+                and order.generated_sale_id is None
+            ):
+                create_sale_from_order(order)
 
         try:
             from ai_assistant.services.agent import evaluate_order_stock

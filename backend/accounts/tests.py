@@ -119,7 +119,7 @@ class OrderRolePermissionTests(TestCase):
     def _payload(self):
         return {
             "customer": self.customer.id,
-            "items_input": [{"product": self.product.id, "quantity": 1}],
+            "items_input": [{"product": self.product.id, "quantity": 1, "unit_price": "20.00"}],
         }
 
     def test_support_can_view_but_not_mutate_orders(self):

@@ -150,6 +150,7 @@ export interface OrderItem {
   product_name: string;
   sku: string;
   quantity: number;
+  unit_price: string;
   stock_status: StockStatus;
 }
 
@@ -158,7 +159,7 @@ export interface Order {
   customer: number;
   customer_name: string;
   items: OrderItem[];
-  items_input?: { product: number; quantity: number }[];
+  items_input?: { product: number; quantity: number; unit_price: number }[];
   status: OrderStatus;
   due_date: string | null;
   active_alerts_count: number;

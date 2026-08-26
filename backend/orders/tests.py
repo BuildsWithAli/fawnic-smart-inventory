@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from inventory.models import Brand, Category, Product, Warehouse
 from partners.models import Customer
+from transactions.models import Sale
 
 from .models import Order, OrderItem
 
@@ -44,3 +45,94 @@ class OrderStatusUpdateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "cutting")
+
+
+@patch("ai_assistant.services.agent.evaluate_order_stock")
+class ShippedTriggersSaleTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="tester2", password="Test@12345", role=User.Role.OWNER)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        category = Category.objects.create(name="Wallets")
+        brand = Brand.objects.create(name="FAWNIC Classic")
+        warehouse = Warehouse.objects.create(name="Main Warehouse")
+        self.product_a = Product.objects.create(
+            sku="FWN-TEST-A", name="Test Wallet A", category=category, brand=brand,
+            warehouse=warehouse, quantity=10, unit_cost=Decimal("10.00"), reorder_threshold=2,
+        )
+        self.product_b = Product.objects.create(
+            sku="FWN-TEST-B", name="Test Wallet B", category=category, brand=brand,
+            warehouse=warehouse, quantity=5, unit_cost=Decimal("8.00"), reorder_threshold=2,
+        )
+        self.customer = Customer.objects.create(name="Test Customer")
+        self.order = Order.objects.create(customer=self.customer, status=Order.Status.QUALITY_CHECK)
+        OrderItem.objects.create(order=self.order, product=self.product_a, quantity=3, unit_price=Decimal("25.00"))
+        OrderItem.objects.create(order=self.order, product=self.product_b, quantity=2, unit_price=Decimal("15.00"))
+
+    def test_shipping_order_creates_sale_with_customer_and_items(self, mock_evaluate):
+        response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "shipped"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Sale.objects.count(), 1)
+
+        sale = Sale.objects.get()
+        self.assertEqual(sale.customer, self.customer)
+        self.assertEqual(sale.items.count(), 2)
+
+        item_a = sale.items.get(product=self.product_a)
+        self.assertEqual(item_a.quantity, 3)
+        self.assertEqual(item_a.unit_price, Decimal("25.00"))
+        item_b = sale.items.get(product=self.product_b)
+        self.assertEqual(item_b.quantity, 2)
+        self.assertEqual(item_b.unit_price, Decimal("15.00"))
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.generated_sale_id, sale.id)
+
+        self.product_a.refresh_from_db()
+        self.product_b.refresh_from_db()
+        self.assertEqual(self.product_a.quantity, 7)
+        self.assertEqual(self.product_b.quantity, 3)
+
+    def test_shipping_twice_does_not_duplicate_sale(self, mock_evaluate):
+        first = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "shipped"}, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(Sale.objects.count(), 1)
+        first_sale_id = Sale.objects.get().id
+
+        back = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "cutting"}, format="json")
+        self.assertEqual(back.status_code, 200)
+
+        second = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "shipped"}, format="json")
+        self.assertEqual(second.status_code, 200)
+
+        self.assertEqual(Sale.objects.count(), 1)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.generated_sale_id, first_sale_id)
+
+    def test_already_shipped_does_not_create_sale(self, mock_evaluate):
+        self.order.status = Order.Status.SHIPPED
+        self.order.save(update_fields=["status"])
+
+        response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "shipped"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Sale.objects.count(), 0)
+
+    def test_insufficient_stock_blocks_transition_and_sale_creation(self, mock_evaluate):
+        OrderItem.objects.create(order=self.order, product=self.product_b, quantity=999, unit_price=Decimal("15.00"))
+
+        response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "shipped"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Sale.objects.count(), 0)
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, Order.Status.QUALITY_CHECK)
+        self.assertIsNone(self.order.generated_sale_id)
+
+        self.product_a.refresh_from_db()
+        self.product_b.refresh_from_db()
+        self.assertEqual(self.product_a.quantity, 10)
+        self.assertEqual(self.product_b.quantity, 5)

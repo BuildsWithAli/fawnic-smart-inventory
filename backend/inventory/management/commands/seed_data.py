@@ -1,5 +1,6 @@
 import datetime
 import random
+from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -217,5 +218,13 @@ class Command(BaseCommand):
             )
             if created:
                 OrderItem.objects.bulk_create(
-                    [OrderItem(order=order, product=products[sku], quantity=qty) for sku, qty in items]
+                    [
+                        OrderItem(
+                            order=order,
+                            product=products[sku],
+                            quantity=qty,
+                            unit_price=products[sku].unit_cost * Decimal("1.6"),
+                        )
+                        for sku, qty in items
+                    ]
                 )

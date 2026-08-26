@@ -26,6 +26,7 @@ const COLUMNS: { status: OrderStatus; label: string }[] = [
 interface NewOrderItem {
   product: string;
   quantity: string;
+  unit_price: string;
 }
 
 export function KanbanPage() {
@@ -40,7 +41,7 @@ export function KanbanPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [items, setItems] = useState<NewOrderItem[]>([{ product: "", quantity: "1" }]);
+  const [items, setItems] = useState<NewOrderItem[]>([{ product: "", quantity: "1", unit_price: "" }]);
   const [isSaving, setIsSaving] = useState(false);
 
   const load = async () => {
@@ -104,12 +105,12 @@ export function KanbanPage() {
   const openCreate = () => {
     setCustomerId("");
     setDueDate("");
-    setItems([{ product: "", quantity: "1" }]);
+    setItems([{ product: "", quantity: "1", unit_price: "" }]);
     setIsCreateOpen(true);
   };
 
   const isValid = useMemo(
-    () => customerId && items.every((i) => i.product && Number(i.quantity) > 0),
+    () => customerId && items.every((i) => i.product && Number(i.quantity) > 0 && Number(i.unit_price) > 0),
     [customerId, items],
   );
 
@@ -119,7 +120,11 @@ export function KanbanPage() {
       await orderApi.create({
         customer: Number(customerId),
         due_date: dueDate || null,
-        items_input: items.map((i) => ({ product: Number(i.product), quantity: Number(i.quantity) })),
+        items_input: items.map((i) => ({
+          product: Number(i.product),
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+        })),
       } as never);
       show("Order created.", "success");
       setIsCreateOpen(false);
@@ -216,7 +221,7 @@ export function KanbanPage() {
 
           <div className="flex flex-col gap-2">
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-[1fr_100px] gap-2">
+              <div key={index} className="grid grid-cols-[1fr_90px_110px] gap-2">
                 <Select
                   label={index === 0 ? "Product" : undefined}
                   value={item.product}
@@ -242,6 +247,16 @@ export function KanbanPage() {
                     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, quantity: e.target.value } : it)))
                   }
                 />
+                <Input
+                  label={index === 0 ? "Unit Price" : undefined}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={item.unit_price}
+                  onChange={(e) =>
+                    setItems((prev) => prev.map((it, i) => (i === index ? { ...it, unit_price: e.target.value } : it)))
+                  }
+                />
               </div>
             ))}
             <Button
@@ -249,7 +264,7 @@ export function KanbanPage() {
               variant="secondary"
               size="sm"
               className="self-start"
-              onClick={() => setItems((prev) => [...prev, { product: "", quantity: "1" }])}
+              onClick={() => setItems((prev) => [...prev, { product: "", quantity: "1", unit_price: "" }])}
             >
               <Plus size={14} />
               Add product

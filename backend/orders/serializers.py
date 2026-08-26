@@ -12,12 +12,13 @@ class OrderItemReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ["id", "product", "product_name", "sku", "quantity", "stock_status"]
+        fields = ["id", "product", "product_name", "sku", "quantity", "unit_price", "stock_status"]
 
 
 class OrderItemWriteSerializer(serializers.Serializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
     quantity = serializers.IntegerField(min_value=1)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -40,7 +41,10 @@ class OrderSerializer(serializers.ModelSerializer):
         items = validated_data.pop("items_input", [])
         order = Order.objects.create(**validated_data)
         OrderItem.objects.bulk_create(
-            [OrderItem(order=order, product=item["product"], quantity=item["quantity"]) for item in items]
+            [
+                OrderItem(order=order, product=item["product"], quantity=item["quantity"], unit_price=item["unit_price"])
+                for item in items
+            ]
         )
         return order
 
@@ -50,7 +54,12 @@ class OrderSerializer(serializers.ModelSerializer):
         if items is not None:
             instance.items.all().delete()
             OrderItem.objects.bulk_create(
-                [OrderItem(order=instance, product=item["product"], quantity=item["quantity"]) for item in items]
+                [
+                    OrderItem(
+                        order=instance, product=item["product"], quantity=item["quantity"], unit_price=item["unit_price"]
+                    )
+                    for item in items
+                ]
             )
         return instance
 
