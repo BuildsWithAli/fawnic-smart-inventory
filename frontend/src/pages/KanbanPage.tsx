@@ -6,6 +6,7 @@ import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { OrderCard } from "../features/kanban/OrderCard";
@@ -43,6 +44,9 @@ export function KanbanPage() {
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<NewOrderItem[]>([{ product: "", quantity: "1", unit_price: "" }]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
@@ -136,6 +140,21 @@ export function KanbanPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingOrder) return;
+    setIsDeleting(true);
+    try {
+      await orderApi.remove(deletingOrder.id);
+      show("Order deleted.", "success");
+      setDeletingOrder(null);
+      void load();
+    } catch (err) {
+      show(extractErrorMessage(err, "Couldn't delete this order."), "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
@@ -176,7 +195,14 @@ export function KanbanPage() {
                       </>
                     ) : (
                       columns[col.status].map((order, index) => (
-                        <OrderCard key={order.id} order={order} index={index} canDrag={canWrite} />
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          index={index}
+                          canDrag={canWrite}
+                          canDelete={canWrite}
+                          onDelete={setDeletingOrder}
+                        />
                       ))
                     )}
                     {provided.placeholder}
@@ -272,6 +298,21 @@ export function KanbanPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={deletingOrder !== null}
+        title="Delete Order"
+        message={
+          deletingOrder && deletingOrder.active_alerts_count > 0
+            ? `Are you sure you want to delete order #${deletingOrder.id}? This action cannot be undone. It has ${deletingOrder.active_alerts_count} unresolved stock alert(s) — they'll remain in Alert history but will no longer be linked to this order.`
+            : "Are you sure you want to delete this order? This action cannot be undone."
+        }
+        confirmLabel="Delete"
+        danger
+        isLoading={isDeleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeletingOrder(null)}
+      />
     </div>
   );
 }

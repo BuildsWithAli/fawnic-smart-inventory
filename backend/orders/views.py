@@ -3,6 +3,7 @@ import logging
 from django.db import transaction
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from accounts.permissions import IsOwnerOrInventoryManager
@@ -21,6 +22,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     filterset_fields = ["status", "customer"]
     search_fields = ["customer__name"]
     ordering_fields = ["due_date", "created_at"]
+
+    def perform_destroy(self, instance):
+        if instance.generated_sale_id is not None:
+            raise ValidationError(
+                f"Order #{instance.id} has already been converted to Sale #{instance.generated_sale_id} "
+                "and can't be deleted."
+            )
+        instance.delete()
 
     @action(detail=True, methods=["patch"], url_path="status")
     def update_status(self, request, pk=None):

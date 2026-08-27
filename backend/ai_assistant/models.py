@@ -12,7 +12,7 @@ class StockAlert(models.Model):
         CRITICAL = "critical", "Critical"
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="stock_alerts")
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="stock_alerts", null=True, blank=True)
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, related_name="stock_alerts", null=True, blank=True)
     severity = models.CharField(max_length=16, choices=Severity.choices)
     suggested_quantity = models.PositiveIntegerField(null=True, blank=True)
 

@@ -31,8 +31,9 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "customer", "customer_name", "items", "items_input", "status",
-            "due_date", "active_alerts_count", "created_at", "updated_at",
+            "due_date", "active_alerts_count", "generated_sale", "created_at", "updated_at",
         ]
+        read_only_fields = ["generated_sale"]
 
     def get_active_alerts_count(self, obj):
         return obj.stock_alerts.filter(resolved=False).count()

@@ -163,6 +163,7 @@ export interface Order {
   status: OrderStatus;
   due_date: string | null;
   active_alerts_count: number;
+  generated_sale: number | null;
   created_at: string;
   updated_at: string;
 }
