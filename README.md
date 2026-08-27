@@ -8,7 +8,7 @@ FAWNIC needed a system to manage:
 
 - Product/master data (products, brands, categories, warehouses)
 - Suppliers and customers
-- Purchases and sales, with automatic, atomic stock synchronization
+- Purchases and sales, with automatic, atomic stock synchronization — deleting a purchase or sale reverses its stock effect in the same transaction (a purchase deletion is refused if that stock has since been sold)
 - A manual stock-adjustment audit trail
 - Custom production orders tracked through a drag-and-drop Kanban board (Pending → Cutting → Stitching → Quality Check → Shipped)
 - An **agentic AI stock assistant** that checks real stock levels when an order's status changes and raises alerts / reorder suggestions — using tool-calling with a hard-coded, closed set of four tools, never direct database access
@@ -39,7 +39,7 @@ fawnic-inventory/ (repo root)
         └── hooks/                       auth context, toast system, debounce
 ```
 
-Business logic lives in Django `services.py` modules, not in views or serializers — e.g. `transactions/services.py` (`create_purchase`, `create_sale`) and `inventory/services.py` (`adjust_stock`) wrap stock mutations in atomic transactions. The frontend never mutates stock directly; it only calls these API endpoints.
+Business logic lives in Django `services.py` modules, not in views or serializers — e.g. `transactions/services.py` (`create_purchase`, `create_sale`, and their counterparts `delete_purchase`, `delete_sale`, which reverse the stock delta on deletion) and `inventory/services.py` (`adjust_stock`) wrap stock mutations in atomic transactions. The frontend never mutates stock directly; it only calls these API endpoints. Deleting a `Sale` that was auto-generated from a shipped order also rewinds that order to Quality Check so the Kanban board stays consistent.
 
 ### The AI agent's safety design
 
@@ -144,7 +144,7 @@ cd backend
 python manage.py test
 ```
 
-Covers: product creation, purchase stock increase, sale stock decrease (and atomic rollback on insufficient stock), stock-adjustment audit trail, dashboard ORM aggregation correctness, order status updates (including AI-failure resilience), the AI tool whitelist (rejecting any non-whitelisted tool call), and a full agentic-loop test proving a low-stock scenario produces a `StockAlert` populated with real, tool-retrieved numbers.
+Covers: product creation, purchase stock increase, sale stock decrease (and atomic rollback on insufficient stock), stock reversal when a purchase or sale is deleted (including the block when a purchase's stock was already sold, role-permission enforcement on delete, and the order rewind for an auto-generated sale), stock-adjustment audit trail, dashboard ORM aggregation correctness, order status updates (including AI-failure resilience), the AI tool whitelist (rejecting any non-whitelisted tool call), and a full agentic-loop test proving a low-stock scenario produces a `StockAlert` populated with real, tool-retrieved numbers.
 
 Frontend workflows (login, dashboard, all CRUD screens, purchases/sales, Kanban drag-and-drop, alerts, responsive/mobile layout) were manually verified in a real browser against the live backend.
 
