@@ -4,6 +4,7 @@ from accounts.permissions import IsOwnerOrInventoryManager
 
 from .models import Purchase, Sale
 from .serializers import PurchaseSerializer, SaleSerializer
+from .services import delete_purchase, delete_sale
 
 
 class PurchaseViewSet(viewsets.ModelViewSet):
@@ -14,6 +15,9 @@ class PurchaseViewSet(viewsets.ModelViewSet):
     search_fields = ["supplier__name"]
     ordering_fields = ["date", "created_at"]
 
+    def perform_destroy(self, instance):
+        delete_purchase(instance)
+
 
 class SaleViewSet(viewsets.ModelViewSet):
     queryset = Sale.objects.select_related("customer").prefetch_related("items__product").all()
@@ -22,3 +26,6 @@ class SaleViewSet(viewsets.ModelViewSet):
     filterset_fields = ["customer", "status"]
     search_fields = ["customer__name"]
     ordering_fields = ["date", "created_at"]
+
+    def perform_destroy(self, instance):
+        delete_sale(instance)

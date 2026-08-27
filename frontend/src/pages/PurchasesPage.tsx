@@ -239,7 +239,7 @@ export function PurchasesPage() {
       <ConfirmDialog
         isOpen={deleting !== null}
         title="Delete Purchase"
-        message="Deleting this purchase record will not automatically reverse the stock increase. Continue only if you know what you're doing."
+        message="Deleting this purchase will reverse the stock it added, in the same step. If some of that stock has since been sold, the deletion will be blocked. This can't be undone."
         confirmLabel="Delete"
         danger
         isLoading={isDeleting}

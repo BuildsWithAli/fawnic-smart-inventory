@@ -56,3 +56,56 @@ def create_sale(*, customer, date, items, status=Sale.Status.COMPLETED):
         )
     SaleItem.objects.bulk_create(sale_items)
     return sale
+
+
+@transaction.atomic
+def delete_purchase(purchase):
+    """Deletes a Purchase and reverses the stock increase it applied, atomically.
+
+    Raises ValidationError if reversing any line item would drive a product's
+    quantity below zero (its purchased stock has since been sold or adjusted away).
+    """
+    items = list(purchase.items.select_related("product").all())
+
+    locked = {}
+    for item in items:
+        product = locked.get(item.product_id)
+        if product is None:
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            locked[item.product_id] = product
+        product.quantity -= item.quantity
+
+    for product in locked.values():
+        if product.quantity < 0:
+            raise ValidationError(
+                f"Can't delete this purchase: stock for {product.name} ({product.sku}) "
+                "has since been sold or adjusted, so reversing it would make the quantity negative."
+            )
+
+    for product in locked.values():
+        product.save(update_fields=["quantity", "updated_at"])
+
+    purchase.delete()
+
+
+@transaction.atomic
+def delete_sale(sale):
+    """Deletes a Sale and restores the stock it deducted, atomically.
+
+    If the Sale was auto-generated from a shipped Order, that Order's
+    ``generated_sale`` link is cleared by the FK's on_delete=SET_NULL.
+    """
+    items = list(sale.items.select_related("product").all())
+
+    locked = {}
+    for item in items:
+        product = locked.get(item.product_id)
+        if product is None:
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            locked[item.product_id] = product
+        product.quantity += item.quantity
+
+    for product in locked.values():
+        product.save(update_fields=["quantity", "updated_at"])
+
+    sale.delete()
