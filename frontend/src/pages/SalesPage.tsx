@@ -241,7 +241,7 @@ export function SalesPage() {
       <ConfirmDialog
         isOpen={deleting !== null}
         title="Delete Sale"
-        message="Deleting this sale will restore the stock it deducted back to each product, in the same step. This can't be undone."
+        message="Deleting this sale will restore the stock it deducted back to each product, in the same step. If it came from a shipped order, that order moves back to Quality Check. This can't be undone."
         confirmLabel="Delete"
         danger
         isLoading={isDeleting}

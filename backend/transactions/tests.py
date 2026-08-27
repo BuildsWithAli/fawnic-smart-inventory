@@ -151,7 +151,7 @@ class TransactionReversalOnDeleteTests(TestCase):
         self.assertEqual(self.wallet.quantity, 5)
         self.assertTrue(Purchase.objects.filter(pk=purchase.pk).exists())
 
-    def test_deleting_auto_generated_sale_restores_stock_and_nulls_source_order(self):
+    def _shipped_order_with_sale(self):
         order = Order.objects.create(customer=self.customer, status=Order.Status.SHIPPED)
         OrderItem.objects.create(order=order, product=self.wallet, quantity=4, unit_price=Decimal("30.00"))
         sale = create_sale(
@@ -161,6 +161,10 @@ class TransactionReversalOnDeleteTests(TestCase):
         )
         order.generated_sale = sale
         order.save(update_fields=["generated_sale"])
+        return order, sale
+
+    def test_deleting_auto_generated_sale_restores_stock_and_rewinds_source_order(self):
+        order, sale = self._shipped_order_with_sale()
         self.wallet.refresh_from_db()
         self.assertEqual(self.wallet.quantity, 16)
 
@@ -170,6 +174,30 @@ class TransactionReversalOnDeleteTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(self.wallet.quantity, 20)
         self.assertIsNone(order.generated_sale_id)
+        self.assertEqual(order.status, Order.Status.QUALITY_CHECK)
+
+    def test_deleting_sale_leaves_source_order_alone_if_it_moved_off_shipped(self):
+        order, sale = self._shipped_order_with_sale()
+        order.status = Order.Status.CUTTING
+        order.save(update_fields=["status"])
+
+        delete_sale(sale)
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CUTTING)
+        self.assertIsNone(order.generated_sale_id)
+
+    def test_deleting_manual_sale_touches_no_order(self):
+        order = Order.objects.create(customer=self.customer, status=Order.Status.SHIPPED)
+        sale = create_sale(
+            customer=self.customer,
+            date=datetime.date.today(),
+            items=[{"product": self.wallet, "quantity": 2, "unit_price": Decimal("30.00")}],
+        )
+
+        delete_sale(sale)
+
+        order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.SHIPPED)
 
 

@@ -92,9 +92,15 @@ def delete_purchase(purchase):
 def delete_sale(sale):
     """Deletes a Sale and restores the stock it deducted, atomically.
 
-    If the Sale was auto-generated from a shipped Order, that Order's
-    ``generated_sale`` link is cleared by the FK's on_delete=SET_NULL.
+    If the Sale was auto-generated from an Order that is still ``shipped``,
+    that Order is rewound to ``quality_check`` so the board reflects that the
+    shipment was undone and can be re-triggered by dragging it back to
+    Shipped. The ``generated_sale`` link is cleared by the FK's
+    on_delete=SET_NULL. An Order that has since been moved to another status
+    is left untouched.
     """
+    from orders.models import Order
+
     items = list(sale.items.select_related("product").all())
 
     locked = {}
@@ -108,4 +114,10 @@ def delete_sale(sale):
     for product in locked.values():
         product.save(update_fields=["quantity", "updated_at"])
 
+    source_order = Order.objects.select_for_update().filter(generated_sale=sale).first()
+
     sale.delete()
+
+    if source_order is not None and source_order.status == Order.Status.SHIPPED:
+        source_order.status = Order.Status.QUALITY_CHECK
+        source_order.save(update_fields=["status", "updated_at"])
