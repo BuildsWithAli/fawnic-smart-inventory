@@ -162,6 +162,9 @@ export interface Order {
   items_input?: { product: number; quantity: number; unit_price: number }[];
   status: OrderStatus;
   due_date: string | null;
+  // Set when the order last transitioned into "shipped"; null for orders that
+  // have never shipped (and for legacy shipped orders created before this field).
+  shipped_at: string | null;
   active_alerts_count: number;
   generated_sale: number | null;
   created_at: string;

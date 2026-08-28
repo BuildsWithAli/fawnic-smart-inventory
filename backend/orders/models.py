@@ -18,6 +18,12 @@ class Order(models.Model):
     products = models.ManyToManyField(Product, through="OrderItem", related_name="orders")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     due_date = models.DateField(null=True, blank=True)
+    shipped_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The moment of the most recent transition into Shipped. Re-stamped if the "
+        "order leaves Shipped and returns; otherwise never changes.",
+    )
     generated_sale = models.OneToOneField(
         "transactions.Sale", on_delete=models.SET_NULL, null=True, blank=True, related_name="source_order"
     )

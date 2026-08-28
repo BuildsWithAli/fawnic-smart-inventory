@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
 import clsx from "clsx";
@@ -16,6 +16,11 @@ import { useAlertCount } from "../hooks/useAlertCount";
 import { extractErrorMessage } from "../api/client";
 import { orderApi, customerService, productService } from "../services";
 import type { Customer, Order, OrderStatus, Product } from "../types/models";
+
+// By default the Shipped column only shows orders that reached Shipped within this
+// many days — older ones are archived out of the board view (nothing is deleted;
+// "Show all shipped orders" brings them back). Keyed off the order's `shipped_at`.
+const SHIPPED_BOARD_WINDOW_DAYS = 21;
 
 const COLUMNS: { status: OrderStatus; label: string }[] = [
   { status: "pending", label: "Pending" },
@@ -49,22 +54,28 @@ export function KanbanPage() {
 
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAllShipped, setShowAllShipped] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await orderApi.list({ page_size: 200 });
+      const params: Record<string, number> = { page_size: 200 };
+      if (!showAllShipped) params.shipped_within_days = SHIPPED_BOARD_WINDOW_DAYS;
+      const data = await orderApi.list(params);
       setOrders(data.results);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't load orders."));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showAllShipped]);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
     void (async () => {
       const [customerData, productData] = await Promise.all([
         customerService.list({ page: 1 }),
@@ -170,14 +181,23 @@ export function KanbanPage() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {canWrite && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={showAllShipped}
+            onChange={(e) => setShowAllShipped(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-accent focus:ring-2 focus:ring-accent/40"
+          />
+          Show all shipped orders
+        </label>
+        {canWrite && (
           <Button onClick={openCreate}>
             <Plus size={16} />
             New Order
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 gap-4 overflow-x-auto pb-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -192,11 +212,16 @@ export function KanbanPage() {
                     snapshot.isDraggingOver && "bg-accent-soft/50",
                   )}
                 >
-                  <div className="mb-3 flex items-center justify-between px-1">
-                    <h3 className="font-display text-sm font-medium text-ink">{col.label}</h3>
-                    <span className="rounded-full bg-surface px-2 py-0.5 text-xs text-muted border border-border">
-                      {columns[col.status].length}
-                    </span>
+                  <div className="mb-3 px-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display text-sm font-medium text-ink">{col.label}</h3>
+                      <span className="rounded-full bg-surface px-2 py-0.5 text-xs text-muted border border-border">
+                        {columns[col.status].length}
+                      </span>
+                    </div>
+                    {col.status === "shipped" && !showAllShipped && (
+                      <p className="mt-0.5 text-[11px] text-muted">Last {SHIPPED_BOARD_WINDOW_DAYS} days</p>
+                    )}
                   </div>
                   <div className="flex flex-1 flex-col gap-2.5">
                     {isLoading ? (

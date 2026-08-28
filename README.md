@@ -41,6 +41,8 @@ fawnic-inventory/ (repo root)
 
 Business logic lives in Django `services.py` modules, not in views or serializers — e.g. `transactions/services.py` (`create_purchase`, `create_sale`, and their counterparts `delete_purchase`, `delete_sale`, which reverse the stock delta on deletion) and `inventory/services.py` (`adjust_stock`) wrap stock mutations in atomic transactions. The frontend never mutates stock directly; it only calls these API endpoints. Deleting a `Sale` that was auto-generated from a shipped order also rewinds that order to Quality Check so the Kanban board stays consistent.
 
+**Shipped-column archiving.** An order records `shipped_at` the moment it transitions into Shipped (re-stamped if it leaves and returns). By default the Kanban board only fetches Shipped orders from the last 21 days — `GET /api/orders/?shipped_within_days=21`, a filter the board opts into; orders in every other column are never affected regardless of age or due date. Older Shipped orders are still one click away via the board's "Show all shipped orders" toggle, and nothing is deleted or hidden anywhere else — the Orders data, Sales history, and dashboard all ignore the parameter and see every order.
+
 ### The AI agent's safety design
 
 The agent (`backend/ai_assistant/services/agent.py`) is triggered from `orders/views.py` whenever an order's Kanban status changes (`PATCH /api/orders/{id}/status/`). It can call **exactly four** tools, implemented as real Django functions in `ai_assistant/services/tools.py`:
@@ -152,7 +154,7 @@ cd backend
 python manage.py test
 ```
 
-Covers: product creation, purchase stock increase, sale stock decrease (and atomic rollback on insufficient stock), stock reversal when a purchase or sale is deleted (including the block when a purchase's stock was already sold, role-permission enforcement on delete, and the order rewind for an auto-generated sale), stock-adjustment audit trail, dashboard ORM aggregation correctness, order status updates (including AI-failure resilience), the AI tool whitelist (rejecting any non-whitelisted tool call), and a full agentic-loop test proving a low-stock scenario produces a `StockAlert` populated with real, tool-retrieved numbers.
+Covers: product creation, purchase stock increase, sale stock decrease (and atomic rollback on insufficient stock), stock reversal when a purchase or sale is deleted (including the block when a purchase's stock was already sold, role-permission enforcement on delete, and the order rewind for an auto-generated sale), stock-adjustment audit trail, dashboard ORM aggregation correctness, order status updates (including AI-failure resilience), `shipped_at` stamping and the Shipped-column window filter (old shipped orders excluded by default, non-Shipped orders never affected), the AI tool whitelist (rejecting any non-whitelisted tool call), and a full agentic-loop test proving a low-stock scenario produces a `StockAlert` populated with real, tool-retrieved numbers.
 
 Frontend workflows (login, dashboard, all CRUD screens, purchases/sales, Kanban drag-and-drop, alerts, responsive/mobile layout) were manually verified in a real browser against the live backend.
 
