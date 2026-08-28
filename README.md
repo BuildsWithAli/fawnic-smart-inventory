@@ -52,6 +52,8 @@ The agent (`backend/ai_assistant/services/agent.py`) is triggered from `orders/v
 
 `agent.TOOL_FUNCTIONS` is a hard-coded dict mapping exactly those four names to those four functions — the dispatcher (`_execute_tool`) rejects anything not in that dict before any code runs. The model never receives an ORM handle, SQL access, or any code-execution path; it only exchanges JSON tool-call requests/results with the provider layer. Writes to `StockAlert` happen only inside `flag_low_stock`/`suggest_reorder`, which validate their own inputs independent of what the model claims. `Product.quantity` is never written by anything in `ai_assistant`.
 
+`flag_low_stock` is idempotent per order: a repeat call for the same product+order refreshes the existing open alert instead of stacking a duplicate, backed by a partial unique constraint (`uniq_open_stockalert_per_product_order`). This absorbs the case where a timed-out provider rung's abandoned worker thread finishes after a later rung already flagged the same order.
+
 The provider layer (`ai_assistant/services/providers.py`) implements a single `AIProvider` interface with `ClaudeProvider`, `OpenAIProvider`, `GeminiProvider`, and an optional local `OllamaProvider` — the rest of the app only ever talks to `AIProvider`, never to a specific SDK.
 
 ## 3. Tech Stack

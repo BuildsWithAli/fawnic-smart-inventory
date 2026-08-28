@@ -122,6 +122,47 @@ class ToolFunctionTests(TestCase):
         with self.assertRaises(ValueError):
             tools.suggest_reorder(product_id=product.id, suggested_qty=0)
 
+    def test_flag_low_stock_reuses_the_open_alert_for_the_same_product_and_order(self):
+        """A second flag_low_stock for the same product+order — e.g. a timed-out
+        provider rung's abandoned thread finishing after the next rung already
+        flagged — refreshes the existing open alert instead of stacking a row."""
+        product = make_product(quantity=3, reorder_threshold=10)
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+
+        first = tools.flag_low_stock(product_id=product.id, order_id=order.id, severity="medium")
+        second = tools.flag_low_stock(product_id=product.id, order_id=order.id, severity="high")
+
+        self.assertEqual(first["alert_id"], second["alert_id"])
+        self.assertEqual(
+            StockAlert.objects.filter(product=product, order=order, resolved=False).count(), 1
+        )
+        alert = StockAlert.objects.get(pk=first["alert_id"])
+        self.assertEqual(alert.severity, "high")
+
+    def test_flag_low_stock_creates_a_new_alert_once_the_previous_one_is_resolved(self):
+        product = make_product(quantity=3, reorder_threshold=10)
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+
+        first = tools.flag_low_stock(product_id=product.id, order_id=order.id, severity="medium")
+        StockAlert.objects.filter(pk=first["alert_id"]).update(resolved=True)
+
+        second = tools.flag_low_stock(product_id=product.id, order_id=order.id, severity="medium")
+
+        self.assertNotEqual(first["alert_id"], second["alert_id"])
+        self.assertEqual(StockAlert.objects.filter(product=product, order=order).count(), 2)
+
+    def test_flag_low_stock_without_an_order_still_creates_each_time(self):
+        """Order-less alerts (suggest_reorder's fallback path) have no natural
+        dedupe key, so they are not collapsed."""
+        product = make_product(quantity=3, reorder_threshold=10)
+
+        first = tools.flag_low_stock(product_id=product.id, order_id=None, severity="medium")
+        second = tools.flag_low_stock(product_id=product.id, order_id=None, severity="medium")
+
+        self.assertNotEqual(first["alert_id"], second["alert_id"])
+
 
 class AlertRolePermissionTests(TestCase):
     """Support can view AI Alerts but must not resolve them; Owner and

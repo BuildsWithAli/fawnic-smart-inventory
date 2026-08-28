@@ -26,6 +26,17 @@ class StockAlert(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # At most one open (unresolved) alert per product per order. Guards
+            # against a timed-out AI provider rung's abandoned worker thread
+            # stacking a duplicate alert after a later rung already flagged the
+            # same order. Order-less alerts are exempt — they have no such key.
+            models.UniqueConstraint(
+                fields=["product", "order"],
+                condition=models.Q(resolved=False, order__isnull=False),
+                name="uniq_open_stockalert_per_product_order",
+            ),
+        ]
 
     def __str__(self):
         return f"StockAlert({self.product.sku}, {self.severity})"

@@ -40,20 +40,31 @@ def get_reorder_threshold(product_id: int) -> dict:
 
 def flag_low_stock(product_id: int, order_id: int, severity: str) -> dict:
     """Create a StockAlert. Snapshots the product's real current stock/threshold
-    at creation time so the alert can never be accused of showing invented numbers."""
+    at the time of the call so the alert can never be accused of showing invented
+    numbers.
+
+    When tied to an order, this is idempotent: a second call for the same
+    product+order refreshes the existing open alert rather than stacking a
+    duplicate (a timed-out AI provider rung's abandoned thread can land here
+    after a later rung already flagged the same order). Order-less alerts have
+    no natural key and are always created fresh."""
     if severity not in ALLOWED_SEVERITIES:
         raise ValueError(f"Invalid severity '{severity}'. Must be one of {sorted(ALLOWED_SEVERITIES)}.")
 
     product = Product.objects.get(pk=product_id)
     order = Order.objects.get(pk=order_id) if order_id is not None else None
 
-    alert = StockAlert.objects.create(
-        product=product,
-        order=order,
-        severity=severity,
-        current_stock_at_alert=product.quantity,
-        reorder_threshold_at_alert=product.reorder_threshold,
-    )
+    snapshot = {
+        "severity": severity,
+        "current_stock_at_alert": product.quantity,
+        "reorder_threshold_at_alert": product.reorder_threshold,
+    }
+    if order is None:
+        alert = StockAlert.objects.create(product=product, order=None, resolved=False, **snapshot)
+    else:
+        alert, _created = StockAlert.objects.update_or_create(
+            product=product, order=order, resolved=False, defaults=snapshot
+        )
     return {
         "alert_id": alert.id,
         "product_id": product.id,
