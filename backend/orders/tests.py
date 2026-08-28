@@ -33,9 +33,14 @@ class OrderStatusUpdateTests(TestCase):
 
     @patch("ai_assistant.services.agent.evaluate_order_stock")
     def test_status_update_persists_and_triggers_ai_check(self, mock_evaluate):
+        from ai_assistant.services.agent import StockCheckResult
+
+        mock_evaluate.return_value = StockCheckResult(status="ok", summary="looks fine", provider="TestProvider")
+
         response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "cutting"}, format="json")
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["ai_stock_check"], "ok")
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "cutting")
         mock_evaluate.assert_called_once_with(self.order)
@@ -45,8 +50,22 @@ class OrderStatusUpdateTests(TestCase):
         response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "cutting"}, format="json")
 
         self.assertEqual(response.status_code, 200)
+        # The status change is saved, and the response says the check didn't run
+        # (rather than silently implying stock is fine).
+        self.assertEqual(response.data["ai_stock_check"], "unavailable")
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "cutting")
+
+    @patch("ai_assistant.services.agent.evaluate_order_stock")
+    def test_status_update_reports_ai_check_unavailable_when_all_providers_fail(self, mock_evaluate):
+        from ai_assistant.services.agent import StockCheckResult
+
+        mock_evaluate.return_value = StockCheckResult(status="unavailable", summary=None, provider=None)
+
+        response = self.client.patch(f"/api/orders/{self.order.id}/status/", {"status": "cutting"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["ai_stock_check"], "unavailable")
 
 
 @patch("ai_assistant.services.agent.evaluate_order_stock")

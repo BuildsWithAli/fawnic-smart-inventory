@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
-import { alertService } from "../services";
+import { AlertCountProvider, useAlertCount } from "../hooks/useAlertCount";
 
 const TITLES: Record<string, string> = {
   "/": "Dashboard",
@@ -20,25 +20,17 @@ const TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
-export function AppLayout() {
+function AppLayoutShell() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [alertCount, setAlertCount] = useState(0);
+  const { count: alertCount, refresh: refreshAlertCount } = useAlertCount();
 
+  // Refresh the bell on every navigation, on top of the provider's poll — so
+  // resolving an alert or landing on a page reflects immediately.
   useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const data = await alertService.list({ resolved: "false" });
-        setAlertCount(data.count);
-      } catch {
-        /* non-critical widget */
-      }
-    };
-    void fetchCount();
-    const interval = setInterval(fetchCount, 60_000);
-    return () => clearInterval(interval);
-  }, [location.pathname]);
+    refreshAlertCount();
+  }, [location.pathname, refreshAlertCount]);
 
   const title = TITLES[location.pathname] ?? "FAWNIC";
 
@@ -57,5 +49,13 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export function AppLayout() {
+  return (
+    <AlertCountProvider>
+      <AppLayoutShell />
+    </AlertCountProvider>
   );
 }

@@ -32,11 +32,11 @@ class AIProvider(ABC):
 
 
 class ClaudeProvider(AIProvider):
-    def __init__(self, model="claude-sonnet-4-5-20250929", api_key=None):
+    def __init__(self, model=None, api_key=None):
         from anthropic import Anthropic
 
         self.client = Anthropic(api_key=api_key or settings.ANTHROPIC_API_KEY)
-        self.model = model
+        self.model = model or settings.ANTHROPIC_MODEL
 
     def run_tool_agent(self, *, system_prompt, user_prompt, tools, tool_executor, max_turns=6):
         anthropic_tools = [
@@ -85,11 +85,11 @@ class ClaudeProvider(AIProvider):
 class OpenAIProvider(AIProvider):
     """Fallback provider. Same tool-calling contract via OpenAI's chat completions API."""
 
-    def __init__(self, model="gpt-4o-mini", api_key=None):
+    def __init__(self, model=None, api_key=None):
         from openai import OpenAI
 
         self.client = OpenAI(api_key=api_key or settings.OPENAI_API_KEY)
-        self.model = model
+        self.model = model or settings.OPENAI_MODEL
 
     def run_tool_agent(self, *, system_prompt, user_prompt, tools, tool_executor, max_turns=6):
         openai_tools = [
@@ -221,11 +221,11 @@ class GeminiProvider(AIProvider):
     Same tool-calling contract as the other providers — the model only ever
     sees JSON tool-call requests/results via `tool_executor`."""
 
-    def __init__(self, model="gemini-3.6-flash", api_key=None):
+    def __init__(self, model=None, api_key=None):
         from google import genai
 
         self.client = genai.Client(api_key=api_key or settings.GEMINI_API_KEY)
-        self.model = model
+        self.model = model or settings.GEMINI_MODEL
 
     def run_tool_agent(self, *, system_prompt, user_prompt, tools, tool_executor, max_turns=6):
         from google.genai import types

@@ -164,3 +164,16 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "claude")
+
+# Per-provider model selection. Kept in settings (not hardcoded in the provider
+# classes) so switching models — or providers — is an env change, no code edit.
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+# Newer Gemini API keys are restricted to the Gemini 3.x family (2.5-flash /
+# 2.5-flash-lite return 404 "no longer available to new users"). The "-flash-lite"
+# variant carries a higher free-tier RPD than "-flash" — verify the real ceiling
+# for your project at https://aistudio.google.com/rate-limit. GEMINI_FALLBACK_MODEL
+# is the second Gemini rung the stock-check agent tries if the primary model is
+# rate-limited, before it drops to a different provider.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")

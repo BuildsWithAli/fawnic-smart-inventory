@@ -6,6 +6,7 @@ import type {
   Customer,
   DashboardData,
   Order,
+  OrderStatusUpdateResult,
   Product,
   Purchase,
   Sale,
@@ -44,8 +45,8 @@ export const stockAdjustmentApi = {
 
 export const orderApi = {
   ...orderService,
-  updateStatus: async (id: number, status: Order["status"]): Promise<Order> => {
-    const { data } = await apiClient.patch<Order>(`/orders/${id}/status/`, { status });
+  updateStatus: async (id: number, status: Order["status"]): Promise<OrderStatusUpdateResult> => {
+    const { data } = await apiClient.patch<OrderStatusUpdateResult>(`/orders/${id}/status/`, { status });
     return data;
   },
 };

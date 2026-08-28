@@ -85,8 +85,10 @@ cp frontend/.env.example frontend/.env
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts |
 | `DATABASE_URL_ENGINE` | Leave unset for SQLite; set to `postgresql` + the `DATABASE_*` vars for Postgres |
 | `CORS_ALLOWED_ORIGINS` | Frontend origin(s), e.g. `http://localhost:5173` |
-| `AI_PROVIDER` | `claude` \| `openai` \| `gemini` \| `ollama` |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | Only the one matching `AI_PROVIDER` is required |
+| `AI_PROVIDER` | `claude` \| `openai` \| `gemini` \| `ollama` — the first rung of the stock-check fallback chain |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | The one matching `AI_PROVIDER` is required; any others set become extra fallback rungs |
+| `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `GEMINI_MODEL` | Model per provider. Defaults: `claude-sonnet-4-5-20250929`, `gpt-4o-mini`, `gemini-3.6-flash` |
+| `GEMINI_FALLBACK_MODEL` | Second Gemini model tried if `GEMINI_MODEL` is rate-limited (default `gemini-3.5-flash-lite`) |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | Only used when `AI_PROVIDER=ollama` |
 
 `frontend/.env`:
@@ -135,7 +137,11 @@ The app is now at `http://localhost:5173/`.
 
 ### AI configuration
 
-Set `AI_PROVIDER` to whichever provider you have a key for. The system prompt instructs the model to check real stock via `get_stock_level`/`get_reorder_threshold` before ever calling `flag_low_stock`/`suggest_reorder` — it is structurally incapable of calling anything else (see Architecture above). If no provider is configured/reachable, the Kanban status update still succeeds; the AI check fails silently into the server log rather than blocking the request.
+Set `AI_PROVIDER` to whichever provider you have a key for. The system prompt instructs the model to check real stock via `get_stock_level`/`get_reorder_threshold` before ever calling `flag_low_stock`/`suggest_reorder` — it is structurally incapable of calling anything else (see Architecture above).
+
+**Fallback chain.** `evaluate_order_stock` tries providers in order: the configured `AI_PROVIDER` first, then (when Gemini is configured) `GEMINI_FALLBACK_MODEL`, then every other provider that has credentials, then local Ollama. If one rung errors or times out — e.g. a Gemini free-tier `429 RESOURCE_EXHAUSTED` (free-tier RPD is small; `gemini-3.6-flash` is ~20/day, `-flash-lite` variants are higher — check <https://aistudio.google.com/rate-limit> for your project's real ceiling) — the next rung gets a turn. Rungs share a 45-second overall budget and a 25-second per-rung cap, so neither a slow rung nor the whole chain can stall the Kanban request.
+
+**Visibility.** The Kanban status update always succeeds regardless of the AI outcome. `PATCH /api/orders/{id}/status/` returns an `ai_stock_check` field — `"ok"` (a provider ran the check), `"skipped"` (order has no line items), or `"unavailable"` (every rung failed). The board toasts on `"unavailable"` and refreshes the alert bell so a rate-limit is visible instead of silent.
 
 ### Testing
 
@@ -152,5 +158,5 @@ Frontend workflows (login, dashboard, all CRUD screens, purchases/sales, Kanban 
 
 - Switch `DATABASE_URL_ENGINE=postgresql` and set the `DATABASE_*` vars — models use only Django-portable field types.
 - Set a real `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, and a proper `DJANGO_ALLOWED_HOSTS`.
-- Put `ai_assistant`'s external provider calls behind a task queue if request latency to Claude/OpenAI/Gemini becomes a concern (currently synchronous within the status-update request).
+- Put `ai_assistant`'s external provider calls behind a task queue if request latency to Claude/OpenAI/Gemini becomes a concern (currently synchronous within the status-update request, bounded by a shared 45s timeout across fallback rungs).
 - Django Admin (`/admin/`) is available for superusers but is not part of, and not required by, the user-facing application.

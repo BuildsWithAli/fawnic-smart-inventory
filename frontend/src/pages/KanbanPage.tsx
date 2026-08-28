@@ -12,6 +12,7 @@ import { Skeleton } from "../components/ui/Skeleton";
 import { OrderCard } from "../features/kanban/OrderCard";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
+import { useAlertCount } from "../hooks/useAlertCount";
 import { extractErrorMessage } from "../api/client";
 import { orderApi, customerService, productService } from "../services";
 import type { Customer, Order, OrderStatus, Product } from "../types/models";
@@ -33,6 +34,7 @@ interface NewOrderItem {
 export function KanbanPage() {
   const { show } = useToast();
   const { canWrite } = useAuth();
+  const { refresh: refreshAlertCount } = useAlertCount();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +102,15 @@ export function KanbanPage() {
     try {
       const updated = await orderApi.updateStatus(orderId, newStatus);
       setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+
+      const alertsBefore = previousOrders.find((o) => o.id === orderId)?.active_alerts_count ?? 0;
+      if (updated.active_alerts_count > alertsBefore) {
+        show(`Stock alert raised for order #${orderId} — see AI Alerts.`, "error");
+      } else if (updated.ai_stock_check === "unavailable") {
+        show("Order moved, but the AI stock check couldn't run just now.", "info");
+      }
+      // A new alert (or one resolved elsewhere) should show on the bell right away.
+      refreshAlertCount();
     } catch (err) {
       setOrders(previousOrders);
       show(extractErrorMessage(err, "Couldn't move this order — it has been reverted."), "error");

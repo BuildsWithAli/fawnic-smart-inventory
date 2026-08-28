@@ -225,12 +225,14 @@ class EvaluateOrderStockTests(TransactionTestCase):
 
         fake_provider = ScriptedFakeProvider(product_ids=[low_product.id, healthy_product.id], order_id=order.id)
 
-        original_get_provider = agent.get_provider
-        agent.get_provider = lambda: fake_provider
+        original_get_chain = agent.get_provider_chain
+        agent.get_provider_chain = lambda: [fake_provider]
         try:
-            agent.evaluate_order_stock(order)
+            result = agent.evaluate_order_stock(order)
         finally:
-            agent.get_provider = original_get_provider
+            agent.get_provider_chain = original_get_chain
+
+        self.assertEqual(result.status, "ok")
 
         # Exactly one alert, for the low-stock product only.
         alerts = StockAlert.objects.filter(order=order)
@@ -269,19 +271,121 @@ class EvaluateOrderStockTests(TransactionTestCase):
         order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
         OrderItem.objects.create(order=order, product=product, quantity=1)
 
-        original_get_provider = agent.get_provider
+        original_get_chain = agent.get_provider_chain
         original_timeout = agent.AI_CALL_TIMEOUT_SECONDS
-        agent.get_provider = lambda: HangingProvider()
+        agent.get_provider_chain = lambda: [HangingProvider()]
         agent.AI_CALL_TIMEOUT_SECONDS = 0.2
         try:
             started = time.monotonic()
             result = agent.evaluate_order_stock(order)
             elapsed = time.monotonic() - started
         finally:
-            agent.get_provider = original_get_provider
+            agent.get_provider_chain = original_get_chain
             agent.AI_CALL_TIMEOUT_SECONDS = original_timeout
 
-        self.assertIsNone(result)
+        self.assertEqual(result.status, "unavailable")
         self.assertLess(elapsed, 2, "evaluate_order_stock should give up at the timeout, not wait for the hang")
         # No alert was created either, since the (abandoned) call never got that far.
         self.assertEqual(StockAlert.objects.filter(order=order).count(), 0)
+
+    def test_falls_back_to_next_rung_when_the_first_provider_errors(self):
+        """A provider raising (e.g. a 429 rate-limit) must not drop the stock
+        check — evaluate_order_stock advances to the next rung, which still
+        produces the alert."""
+
+        class ErroringProvider(AIProvider):
+            model = "erroring-model"
+
+            def run_tool_agent(self, **kwargs):
+                raise RuntimeError("429 RESOURCE_EXHAUSTED (simulated)")
+
+        low_product = make_product(quantity=1, reorder_threshold=10, sku="FWN-FB-001")
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+        OrderItem.objects.create(order=order, product=low_product, quantity=1)
+
+        working = ScriptedFakeProvider(product_ids=[low_product.id], order_id=order.id)
+        working.model = "working-model"
+
+        original_get_chain = agent.get_provider_chain
+        agent.get_provider_chain = lambda: [ErroringProvider(), working]
+        try:
+            result = agent.evaluate_order_stock(order)
+        finally:
+            agent.get_provider_chain = original_get_chain
+
+        self.assertEqual(result.status, "ok")
+        self.assertIn("working-model", result.provider)
+        self.assertEqual(StockAlert.objects.filter(order=order, product=low_product).count(), 1)
+
+    def test_result_is_unavailable_when_every_rung_fails(self):
+        class ErroringProvider(AIProvider):
+            def run_tool_agent(self, **kwargs):
+                raise RuntimeError("provider down")
+
+        product = make_product(quantity=1, reorder_threshold=10, sku="FWN-FB-002")
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+        OrderItem.objects.create(order=order, product=product, quantity=1)
+
+        original_get_chain = agent.get_provider_chain
+        agent.get_provider_chain = lambda: [ErroringProvider(), ErroringProvider()]
+        try:
+            result = agent.evaluate_order_stock(order)
+        finally:
+            agent.get_provider_chain = original_get_chain
+
+        self.assertEqual(result.status, "unavailable")
+        self.assertIsNone(result.provider)
+        self.assertEqual(StockAlert.objects.filter(order=order).count(), 0)
+
+    def test_result_is_skipped_when_the_order_has_no_line_items(self):
+        customer = Customer.objects.create(name="Test Customer")
+        order = Order.objects.create(customer=customer, status=Order.Status.CUTTING)
+
+        # No provider should even be consulted.
+        original_get_chain = agent.get_provider_chain
+        agent.get_provider_chain = lambda: (_ for _ in ()).throw(AssertionError("should not be called"))
+        try:
+            result = agent.evaluate_order_stock(order)
+        finally:
+            agent.get_provider_chain = original_get_chain
+
+        self.assertEqual(result.status, "skipped")
+
+
+class ProviderChainTests(TestCase):
+    """get_provider_chain() orders the configured provider first, adds the
+    second Gemini model as its own rung, and always ends with Ollama."""
+
+    @override_settings(
+        AI_PROVIDER="gemini",
+        GEMINI_API_KEY="test-key",
+        GEMINI_MODEL="gemini-2.5-flash",
+        GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite",
+        ANTHROPIC_API_KEY="",
+        OPENAI_API_KEY="",
+    )
+    def test_gemini_primary_then_gemini_fallback_then_ollama(self):
+        chain = agent.get_provider_chain()
+        self.assertEqual([type(p).__name__ for p in chain], ["GeminiProvider", "GeminiProvider", "OllamaProvider"])
+        self.assertEqual(chain[0].model, "gemini-2.5-flash")
+        self.assertEqual(chain[1].model, "gemini-2.5-flash-lite")
+
+    @override_settings(
+        AI_PROVIDER="gemini",
+        GEMINI_API_KEY="test-key",
+        GEMINI_MODEL="gemini-2.5-flash",
+        GEMINI_FALLBACK_MODEL="gemini-2.5-flash",
+    )
+    def test_no_duplicate_gemini_rung_when_fallback_equals_primary(self):
+        models = [p.model for p in agent.get_provider_chain() if type(p).__name__ == "GeminiProvider"]
+        self.assertEqual(models, ["gemini-2.5-flash"])
+
+    @override_settings(
+        AI_PROVIDER="claude", ANTHROPIC_API_KEY="test-key", GEMINI_API_KEY="test-key", OPENAI_API_KEY="",
+    )
+    def test_configured_provider_leads_the_chain(self):
+        chain = agent.get_provider_chain()
+        self.assertEqual(type(chain[0]).__name__, "ClaudeProvider")
+        self.assertEqual(type(chain[-1]).__name__, "OllamaProvider")

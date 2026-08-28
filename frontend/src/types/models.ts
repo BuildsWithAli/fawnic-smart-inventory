@@ -168,6 +168,16 @@ export interface Order {
   updated_at: string;
 }
 
+// Result of the AI stock-check the backend runs on an order status change:
+//   "ok"          — a provider completed the check (alerts may or may not have been raised)
+//   "skipped"     — the order has no line items, nothing to check
+//   "unavailable" — every AI provider rung failed/timed out; no check ran
+export type AiStockCheckStatus = "ok" | "skipped" | "unavailable";
+
+export interface OrderStatusUpdateResult extends Order {
+  ai_stock_check: AiStockCheckStatus;
+}
+
 export type AlertSeverity = "low" | "medium" | "high" | "critical";
 
 export interface StockAlert {

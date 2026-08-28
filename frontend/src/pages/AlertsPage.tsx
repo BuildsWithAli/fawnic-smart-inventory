@@ -8,6 +8,7 @@ import { SeverityBadge } from "../components/crud/StatusBadge";
 import { Badge } from "../components/ui/Badge";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
+import { useAlertCount } from "../hooks/useAlertCount";
 import { extractErrorMessage } from "../api/client";
 import { alertService } from "../services";
 import type { StockAlert } from "../types/models";
@@ -16,6 +17,7 @@ import { formatDate } from "../utils/format";
 export function AlertsPage() {
   const { show } = useToast();
   const { canWrite } = useAuth();
+  const { refresh: refreshAlertCount } = useAlertCount();
   const [rows, setRows] = useState<StockAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function AlertsPage() {
       await alertService.resolve(alert.id);
       show("Alert marked as resolved.", "success");
       void load();
+      refreshAlertCount();
     } catch (err) {
       show(extractErrorMessage(err, "Couldn't resolve this alert."), "error");
     } finally {
