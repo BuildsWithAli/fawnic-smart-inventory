@@ -2,6 +2,8 @@
 
 A production-quality inventory, purchasing, sales, and production-order management system for **FAWNIC**, a leather-goods business (wallets, belts, bags, leather materials, hardware). Built as a custom SaaS-style application — not Django Admin, not a generic CRUD scaffold.
 
+`django` `django-rest-framework` `react` `typescript` `vite` `tailwindcss` `inventory-management` `order-management` `kanban` `ai-agent` `claude` `sqlite`
+
 ## 1. Project Overview
 
 FAWNIC needed a system to manage:
