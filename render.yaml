@@ -1,0 +1,36 @@
+databases:
+  - name: fawnic-db
+    plan: free
+
+services:
+  - type: web
+    name: fawnic-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput"
+    startCommand: "gunicorn config.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fawnic-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      # Placeholder — replace with the real *.onrender.com hostname Render
+      # assigns this service after the first deploy (Phase 6).
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "REPLACE_AFTER_FIRST_DEPLOY.onrender.com"
+      # Set manually in the Render dashboard — never written to this file.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        sync: false
