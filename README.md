@@ -4,6 +4,9 @@ A production-quality inventory, purchasing, sales, and production-order manageme
 
 `django` `django-rest-framework` `react` `typescript` `vite` `tailwindcss` `inventory-management` `order-management` `kanban` `ai-agent` `claude` `sqlite`
 
+**Live demo:** frontend <https://fawnic-smart-inventory.vercel.app> · API <https://fawnic-backend.onrender.com/api/>
+Sign in with `owner` / `Owner@12345`. Both run on free tiers — the backend sleeps when idle, so the first request after a pause takes ~50s to wake.
+
 ## 1. Project Overview
 
 FAWNIC needed a system to manage:
@@ -88,8 +91,9 @@ cp frontend/.env.example frontend/.env
 |---|---|
 | `DJANGO_SECRET_KEY` | Django secret key (set a real random value in production) |
 | `DJANGO_DEBUG` | `True` for local dev |
-| `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts |
-| `DATABASE_URL_ENGINE` | Leave unset for SQLite; set to `postgresql` + the `DATABASE_*` vars for Postgres |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts. Render's own `*.onrender.com` hostname is trusted automatically via `RENDER_EXTERNAL_HOSTNAME`, so it only needs a value for a custom domain |
+| `DATABASE_URL` | A single Postgres connection URL (Render's managed-DB format). Takes precedence over everything below; leave unset for local SQLite |
+| `DATABASE_URL_ENGINE` | Alternative to `DATABASE_URL`: set to `postgresql` + the discrete `DATABASE_*` vars |
 | `CORS_ALLOWED_ORIGINS` | Frontend origin(s), e.g. `http://localhost:5173` |
 | `AI_PROVIDER` | `claude` \| `openai` \| `gemini` \| `ollama` — the first rung of the stock-check fallback chain |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | The one matching `AI_PROVIDER` is required; any others set become extra fallback rungs |
@@ -101,7 +105,7 @@ cp frontend/.env.example frontend/.env
 
 | Variable | Purpose |
 |---|---|
-| `VITE_API_BASE_URL` | Django API base, e.g. `http://127.0.0.1:8000/api` |
+| `VITE_API_BASE_URL` | Django API base, e.g. `http://127.0.0.1:8000/api` locally, or `https://<your-backend>/api` in production. Compiled into the bundle at build time — a rebuild is required after changing it |
 
 ### Database setup & running the backend
 
@@ -160,9 +164,20 @@ Covers: product creation, purchase stock increase, sale stock decrease (and atom
 
 Frontend workflows (login, dashboard, all CRUD screens, purchases/sales, Kanban drag-and-drop, alerts, responsive/mobile layout) were manually verified in a real browser against the live backend.
 
-### Production considerations
+### Deployment (free tier)
 
-- Switch `DATABASE_URL_ENGINE=postgresql` and set the `DATABASE_*` vars — models use only Django-portable field types.
-- Set a real `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, and a proper `DJANGO_ALLOWED_HOSTS`.
+The repo is wired for a zero-cost demo deploy: **Render** for the Django API + Postgres, **Vercel** for the React frontend.
+
+**Backend — Render.** `render.yaml` at the repo root is a Blueprint: it provisions a free Postgres DB (`fawnic-db`) and a free Python web service (`fawnic-backend`), runs `migrate` → `seed_data` → `collectstatic` in the build, and starts `gunicorn`. `DJANGO_SECRET_KEY` is generated; `DATABASE_URL` is wired from the DB. Set the remaining secrets in the Render dashboard (they are `sync: false` in the file, never committed): `CORS_ALLOWED_ORIGINS` (your Vercel origin, no trailing slash), `AI_PROVIDER`, and the matching `*_API_KEY`.
+Deploy: Render → **New → Blueprint** → pick this repo. `seed_data` runs in the build because the free tier has no shell — that is what puts the demo logins in the deployed DB. The free instance sleeps after ~15 min idle (~50s cold start) and the free Postgres expires after ~30 days.
+
+**Frontend — Vercel.** Import the repo, set **Root Directory** to `frontend` (framework auto-detects as Vite). Add one env var, `VITE_API_BASE_URL` = `https://<your-render-service>.onrender.com/api`, as a plain **Config** value — not "Secret", since `VITE_`-prefixed vars are compiled into the public bundle. `frontend/vercel.json` handles the SPA rewrite so React Router deep links don't 404. Changing the env var needs a redeploy to take effect.
+
+After both are up, make sure Render's `CORS_ALLOWED_ORIGINS` contains the final Vercel URL.
+
+### Other production considerations
+
+- For a non-Render Postgres, set `DATABASE_URL` (or `DATABASE_URL_ENGINE=postgresql` + the discrete `DATABASE_*` vars) — models use only Django-portable field types.
+- Outside Render, set a real `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, and a proper `DJANGO_ALLOWED_HOSTS`.
 - Put `ai_assistant`'s external provider calls behind a task queue if request latency to Claude/OpenAI/Gemini becomes a concern (currently synchronous within the status-update request, bounded by a shared 45s timeout across fallback rungs).
 - Django Admin (`/admin/`) is available for superusers but is not part of, and not required by, the user-facing application.
