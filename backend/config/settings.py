@@ -27,6 +27,13 @@ DEBUG = env_bool("DJANGO_DEBUG", True)
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
+# Render injects RENDER_EXTERNAL_HOSTNAME (e.g. fawnic-backend-xxxx.onrender.com)
+# automatically; trust it so the service works on first deploy without having to
+# hardcode the generated hostname into DJANGO_ALLOWED_HOSTS.
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
+
 
 INSTALLED_APPS = [
     "django.contrib.admin",
